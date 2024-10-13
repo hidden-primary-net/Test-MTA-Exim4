@@ -1,0 +1,39 @@
+##  This is a template for a tempfile created during test runtime
+
+domainlist local_domains = [% LOCAL_DOMAIN_LIST %]
+log_selector = +all
+
+begin acl
+
+begin routers
+
+aliases:
+    domains             =   +local_domains
+    driver              =   redirect
+    data                =   ${expand:${lookup {$local_part@$domain}lsearch*@{[% ALIASFILE %]}}}
+    debug_print         =   "R ${router_name}: Looking up $local_part@$domain in [% ALIASFILE %]"
+    retry_use_local_part
+
+mailbox:
+    driver              =   accept
+    domains             =   +local_domains
+    condition           =   ${lookup{$local_part@$domain}lsearch{[% MAILBOXFILE %]}{$value}{}}
+    transport           =   mailbox
+    debug_print         =   "R ${router_name}: Looking up $local_part@$domain in [% MAILBOXFILE %]"
+
+begin transport
+
+mailbox:
+    driver              =   appendfile
+    directory           =   ${lookup{$local_part@$domain}lsearch{[% MAILBOXFILE %]}}
+    delivery_date_add
+    envelope_to_add
+    return_path_add
+    maildir_format      =   true
+    debug_print         =   "T ${transport_name}: Looking up $local_part@$domain in [% MAILBOXFILE %]"
+
+begin rewrite
+
+begin authenticators
+
+# vim: set filetype=exim:
