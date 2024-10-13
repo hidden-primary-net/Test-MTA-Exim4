@@ -10,7 +10,7 @@ use Try::Tiny;
 use Test::More;
 use Test::MTA::Exim4;
 
-my ( $exim_binary, $exim_cfg_template, $tempdir, $exim_cfg, $aliasfile, $mailboxfile, @domains, @mbs, @als );
+my ( $exim_binary, $exim_cfg_template, $tempdir, $exim_cfg, $aliasfile, $mailboxfile, @domains, %mbs, %als );
 
 BEGIN {
     my $success = try {
@@ -44,12 +44,15 @@ BEGIN {
             join( q(@), q(ac2), $domains[0] ),
             join( q(@), q(ac3), $domains[1] )
         );
-        @mbs = ( $mailbox1, $mailbox2, $mailbox3 );
         my @mailboxes = (
             join( q(:), $mailbox1, File::Spec->catdir( $tempdir => q(ac1) ), ),
             join( q(:), $mailbox2, File::Spec->catdir( $tempdir => q(ac2) ), ),
             join( q(:), $mailbox3, File::Spec->catdir( $tempdir => q(ac3) ), ),
         );
+        %mbs = map {
+            my ( $mb, undef ) = split /:/, $_, 2;
+            ( $mb => { router => q(mailbox), transport => q(mailbox), discarded => 0, ok => 1, } )
+        } @mailboxes;
 
         ##  construct some alias edge cases
         my ( $alias1, $alias2, $alias3, $alias4, $alias5, $alias6, $alias7 ) = (
@@ -61,7 +64,6 @@ BEGIN {
             join( q(@), q(al6), $domains[2] ),
             join( q(@), q(al7), $domains[0] ),
         );
-        @als = ( $alias1, $alias2, $alias3, $alias4, $alias5, $alias6, $alias7 );
         my @aliases = (
             join( q(:), $alias1, $mailbox1 ),
             join( q(:), $alias2, $alias1 ),
@@ -71,6 +73,13 @@ BEGIN {
             join( q(:), $alias6, $alias5 ),
             join( q(:), $alias7, join( q(,), $mailbox1, $mailbox2, $alias5 ) ),
         );
+        %als = map {
+            my ( $a, $d ) = split /:/, $_, 2;
+            (   $a => [
+                    map { { router => q(mailbox), transport => q(mailbox), discarded => 0, ok => 1, } } split /,/, $d
+                ]
+            );
+        } @aliases;
         my $dl_local_domains = join q(:), @domains;
 
         note(qq(Reading template $exim_cfg_template...));
@@ -123,15 +132,11 @@ my $exim = Test::MTA::Exim4->new(
         debug       => 0,
     }
 );
-for ( @mbs, @als ) {
-    $exim->routes_as_ok(
-        $_ => {
-            router    => q(mailbox),
-            transport => q(mailbox),
-            discarded => 0,
-            ok        => 1,
-        }
-    );
+while ( my ( $a, $d ) = each %mbs ) {
+    $exim->routes_as_ok( $a => $d );
+}
+while ( my ( $a, $d ) = each %als ) {
+    $exim->routes_as_ok( $a => $d );
 }
 
 done_testing();
